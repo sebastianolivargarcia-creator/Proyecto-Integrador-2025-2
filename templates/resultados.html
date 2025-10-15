@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados del Análisis - EduQuantum</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Estilos -->
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .navbar {
+            background-color: #007bff;
+        }
+        .navbar-brand, .nav-link, .navbar-text {
+            color: #fff !important;
+        }
+        .table th {
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+        }
+        .table td {
+            text-align: center;
+            vertical-align: middle;
+        }
+        .badge {
+            font-size: 0.9rem;
+        }
+        .container {
+            margin-top: 2rem;
+            margin-bottom: 3rem;
+        }
+        .download-btn {
+            margin-bottom: 1.5rem;
+        }
+        .navbar .btn-outline-light {
+            border-color: rgba(255,255,255,0.6);
+        }
+        .navbar .btn-outline-light:hover {
+            background-color: rgba(255,255,255,0.08);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Barra de navegación -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">EduQuantum</a>
+            <div class="d-flex align-items-center ms-auto">
+                <span class="navbar-text me-3">👋 Hola, {{ profesor }}</span>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">Cerrar sesión</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Contenido principal -->
+    <div class="container">
+        <h2 class="text-center mb-4">📊 Resultados del Análisis de Riesgo de Deserción</h2>
+
+        <!-- Botón de descarga -->
+        <div class="text-center download-btn">
+            <a href="{{ excel_path }}" class="btn btn-success" download>
+                📥 Descargar resultados en Excel
+            </a>
+        </div>
+
+        <!-- Tabla de resultados -->
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover shadow-sm">
+                <thead>
+                    <tr>
+                        <th>Programa Académico</th>
+                        <th>Nombre del Estudiante</th>
+                        <th>Materia</th>
+                        <th>Nota 1</th>
+                        <th>Nota 2</th>
+                        <th>Fallas 1</th>
+                        <th>Fallas 2</th>
+                        <th>Vez Vista</th>
+                        <th>En Riesgo</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in datos %}
+                    <tr>
+                        <td>{{ fila.PROGRAMA_ACADEMICO }}</td>
+                        <td>{{ fila.APELLIDOS_Y_NOMBRES }}</td>
+                        <td>{{ fila.NOM_MATERIA }}</td>
+                        <td>{{ fila.NOTA1 }}</td>
+                        <td>{{ fila.NOTA2 }}</td>
+                        <td>{{ fila.FALLAS1 }}</td>
+                        <td>{{ fila.FALLAS2 }}</td>
+                        <td>{{ fila.VEZVISTA }}</td>
+                        <td>
+                            {% if fila.En_Riesgo == "Sí" %}
+                                <span class="badge bg-danger">Sí</span>
+                            {% else %}
+                                <span class="badge bg-success">No</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if fila.En_Riesgo == "Sí" %}
+                                <!-- Botón para generar sugerencia -->
+                                <button class="btn btn-sm btn-outline-info mb-1 btn-sugerencia" type="button"
+                                    data-nombre="{{ fila.APELLIDOS_Y_NOMBRES }}"
+                                    data-nota1="{{ fila.NOTA1 }}"
+                                    data-nota2="{{ fila.NOTA2 }}"
+                                    data-fallas1="{{ fila.FALLAS1 }}"
+                                    data-fallas2="{{ fila.FALLAS2 }}">
+                                    💬 Sugerencia
+                                </button>
+
+                                <!-- Checkbox para seleccionar para guardar en Firebase -->
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input seleccionar-riesgo" type="checkbox"
+                                        value='{{ fila | tojson }}'>
+                                    <label class="form-check-label">Guardar</label>
+                                </div>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Formulario para guardar estudiantes seleccionados en Firebase -->
+        <div class="d-flex justify-content-center mt-3">
+            <button id="btn-guardar-riesgo" class="btn btn-warning">💾 Guardar seleccionados en Firebase</button>
+        </div>
+
+    <!-- Modal para mostrar sugerencias -->
+        <div class="modal fade" id="sugerenciaModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Sugerencia para el docente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body" id="sugerencia-contenido">
+                <!-- Texto dinámico -->
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+                <!-- Sección Mis guardados al final -->
+                <div class="text-center mt-4 mb-3">
+                        <button id="btn-mis-guardados-bottom" class="btn btn-outline-primary">📚 Ver mis guardados</button>
+                </div>
+
+                <!-- Modal para mis guardados (resultados - bottom) -->
+                <div class="modal fade" id="misGuardadosModalBottom" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Estudiantes guardados</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body" id="mis-guardados-contenido-bottom">
+                                <div id="mis-guardados-list-bottom">Cargando...</div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botón volver -->
+                <div class="text-center mt-3">
+                        <a href="{{ url_for('index') }}" class="btn btn-primary">⬅ Volver al inicio</a>
+                </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center py-3 bg-light mt-auto border-top">
+        <small>© 2025 EduQuantum | Sistema de Predicción de Deserción Académica</small>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Manejar click en botones de sugerencia
+        document.querySelectorAll('.btn-sugerencia').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const tr = e.target.closest('tr')
+                // Construir objeto con datos necesarios
+                const payload = {
+                    'APELLIDOS_Y_NOMBRES': btn.getAttribute('data-nombre'),
+                    'NOTA1': btn.getAttribute('data-nota1'),
+                    'NOTA2': btn.getAttribute('data-nota2'),
+                    'FALLAS1': btn.getAttribute('data-fallas1'),
+                    'FALLAS2': btn.getAttribute('data-fallas2')
+                }
+
+                try {
+                    const res = await fetch('{{ url_for('sugerencia') }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    })
+                    if (!res.ok) {
+                        console.error('Respuesta no OK', res.status)
+                        alert('Error al solicitar sugerencia (servidor)')
+                        return
+                    }
+                    const data = await res.json()
+                    document.getElementById('sugerencia-contenido').innerText = data.sugerencia || 'Sin sugerencia.'
+                    const modal = new bootstrap.Modal(document.getElementById('sugerenciaModal'))
+                    modal.show()
+                } catch (err) {
+                    console.error(err)
+                    alert('Error al solicitar sugerencia (red)')
+                }
+            })
+        })
+
+        // Guardar seleccionados
+        document.getElementById('btn-guardar-riesgo').addEventListener('click', async () => {
+            const seleccionados = []
+            document.querySelectorAll('.seleccionar-riesgo').forEach(cb => {
+                if (cb.checked) {
+                    try {
+                        const obj = JSON.parse(cb.value)
+                        seleccionados.push(obj)
+                    } catch (e) {
+                        console.warn('JSON invalido en fila', e)
+                    }
+                }
+            })
+
+            const btnSave = document.getElementById('btn-guardar-riesgo')
+            btnSave.disabled = true
+            const original = btnSave.innerHTML
+            btnSave.innerHTML = 'Guardando...'
+
+            const showMessage = (msg, type='info') => {
+                const container = document.createElement('div')
+                container.className = `alert ${type === 'error' ? 'alert-danger' : 'alert-success'}`
+                container.style.marginTop = '10px'
+                container.innerText = msg
+                btnSave.parentElement.appendChild(container)
+                setTimeout(() => container.remove(), 5000)
+            }
+
+            if (seleccionados.length === 0) {
+                showMessage('No hay estudiantes seleccionados.', 'error')
+                btnSave.disabled = false
+                btnSave.innerHTML = original
+                return
+            }
+
+            try {
+                const res = await fetch('{{ url_for('guardar_riesgo') }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ seleccion: seleccionados })
+                })
+                if (res.status === 401) {
+                    showMessage('Sesión expirada. Inicie sesión de nuevo.', 'error')
+                    btnSave.disabled = false
+                    btnSave.innerHTML = original
+                    return
+                }
+                if (!res.ok) {
+                    const txt = await res.text().catch(() => '')
+                    console.error('Guardar no OK', res.status, txt)
+                    showMessage('Error guardando en servidor', 'error')
+                    btnSave.disabled = false
+                    btnSave.innerHTML = original
+                    return
+                }
+                const data = await res.json()
+                if (data.ok) {
+                    showMessage(`Guardados: ${data.guardados}`, 'success')
+                } else {
+                    showMessage('No se guardaron estudiantes: ' + (data.message || 'error'), 'error')
+                }
+            } catch (err) {
+                console.error(err)
+                showMessage('Error guardando en servidor (red)', 'error')
+            } finally {
+                btnSave.disabled = false
+                btnSave.innerHTML = original
+            }
+        })
+
+        // Mostrar mis guardados (botón en la parte inferior)
+        const btnBottom = document.getElementById('btn-mis-guardados-bottom')
+        if (btnBottom) {
+            btnBottom.addEventListener('click', async () => {
+                btnBottom.disabled = true
+                const original = btnBottom.innerHTML
+                btnBottom.innerHTML = 'Cargando...'
+                try {
+                    const res = await fetch('{{ url_for('mis_guardados') }}')
+                    if (res.status === 401) {
+                        const cont = document.getElementById('mis-guardados-list-bottom')
+                        cont.innerHTML = '<p class="text-danger">Sesión expirada. Por favor inicie sesión de nuevo.</p>'
+                        const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalBottom'))
+                        modal.show()
+                        return
+                    }
+                    if (!res.ok) {
+                        const txt = await res.text().catch(() => '')
+                        // reportar al servidor
+                        try { await fetch('{{ url_for('log_client_error') }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: 'mis_guardados non-ok', stack: txt})}) } catch(e){}
+                        const cont = document.getElementById('mis-guardados-list-bottom')
+                        cont.innerHTML = '<p class="text-danger">Error cargando guardados (servidor).</p><pre style="white-space:pre-wrap;">'+txt+'</pre>'
+                        const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalBottom'))
+                        modal.show()
+                        return
+                    }
+
+                    let data
+                    try {
+                        data = await res.json()
+                    } catch (parseErr) {
+                        const cont = document.getElementById('mis-guardados-list-bottom')
+                        cont.innerHTML = '<p class="text-danger">Respuesta inválida del servidor.</p>'
+                        const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalBottom'))
+                        modal.show()
+                        return
+                    }
+
+                    const cont = document.getElementById('mis-guardados-list-bottom')
+                    if (!data || data.length === 0) {
+                        cont.innerHTML = '<p>No hay estudiantes guardados.</p>'
+                    } else {
+                        let html = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Nombre</th><th>Materia</th><th>Programa</th><th>Nota1</th><th>Nota2</th><th>Fallas</th><th>Fecha</th></tr></thead><tbody>'
+                        data.forEach(r => {
+                            const fallas = (r.fallas1 || 0) + (r.fallas2 || 0)
+                            const fecha = r.fecha_guardado && r.fecha_guardado._seconds ? new Date(r.fecha_guardado._seconds * 1000).toLocaleString() : (r.fecha_guardado && r.fecha_guardado.iso ? r.fecha_guardado.iso : '')
+                            html += `<tr><td>${r.nombre || ''}</td><td>${r.materia || ''}</td><td>${r.programa || ''}</td><td>${r.nota1 || ''}</td><td>${r.nota2 || ''}</td><td>${fallas}</td><td>${fecha}</td></tr>`
+                        })
+                        html += '</tbody></table></div>'
+                        cont.innerHTML = html
+                    }
+                    const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalBottom'))
+                    modal.show()
+                } catch (err) {
+                    console.error(err)
+                    try { await fetch('{{ url_for('log_client_error') }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: 'mis_guardados fetch error', stack: String(err)})}) } catch(e){}
+                    const cont = document.getElementById('mis-guardados-list-bottom')
+                    cont.innerHTML = '<p class="text-danger">Error de red al cargar guardados.</p>'
+                    const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalBottom'))
+                    modal.show()
+                } finally {
+                    btnBottom.disabled = false
+                    btnBottom.innerHTML = original
+                }
+            })
+        }
+    </script>
+</body>
+</html>

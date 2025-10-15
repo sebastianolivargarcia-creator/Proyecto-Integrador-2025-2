@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eduquantum | Inicio</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Usar url_for para servir css desde static -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <!-- AOS Animations -->
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  <style>
+    #btn-mis-guardados-index { margin-right: 8px; }
+    .nav-user { margin-right: 12px; font-weight:600; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">Eduquantum</div>
+    <nav class="nav" id="navMenu">
+      <ul>
+        <li><a href="#inicio">Inicio</a></li>
+        <li class="dropdown">
+          <a href="#ventajas" class="dropbtn">Ventajas</a>
+          <div class="dropdown-content">
+            <a href="#personalizacion">Aprendizaje Personalizado</a>
+            <a href="#ia">Analítica con IA</a>
+            <a href="#blockchain">Credenciales Blockchain</a>
+          </div>
+        </li>
+        <li><a href="#conceptos">Conceptos</a></li>
+        <li><a href="#fotos">Nuestra Empresa</a></li>
+        <li><a href="#contacto">Contacto</a></li>
+
+        <!-- Login / Profesor info -->
+        {% if current_user.is_authenticated %}
+          <li class="ml-auto"><span class="nav-user">Hola, {{ current_user.nombre }}</span></li>
+          <li><a href="{{ url_for('logout') }}" class="btn-login">Cerrar sesión</a></li>
+        {% else %}
+          <li><a href="{{ url_for('login') }}" class="btn-login">Iniciar Sesión</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+    <!-- Botón hamburguesa -->
+    <div class="menu-toggle" id="menuToggle">☰</div>
+  </header>
+
+  <!-- Flash messages -->
+  <div class="container-flash" style="max-width:1000px;margin:12px auto;">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, msg in messages %}
+          <div class="alert {{ 'alert-success' if category == 'success' else 'alert-danger' }}" style="padding:10px; margin-bottom:8px;">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <!-- Hero -->
+  <section id="inicio" class="hero" data-aos="fade-down">
+    <h1>Diseñando hoy la universidad del 2035</h1>
+    <p>Eduquantum: Ecosistema de Aprendizaje Inteligente con IA y analítica educativa.</p>
+    <a href="#ventajas" class="btn" data-aos="zoom-in" data-aos-delay="200">Conoce más</a>
+  </section>
+
+  <!-- Si el profesor está autenticado: mostrar panel de carga -->
+  {% if current_user.is_authenticated %}
+  <section id="panel-profesor" class="section bg-light" data-aos="fade-up" style="padding: 30px;">
+    <h2>Panel de Profesor</h2>
+    <p>Sube el archivo Excel con las notas y fallas para procesar la predicción de deserción.</p>
+
+    <div class="card" style="padding:16px; max-width:800px;">
+      <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+        <button id="btn-mis-guardados-index" class="btn btn-outline-primary btn-sm">📚 Mis guardados</button>
+      </div>
+      <form action="{{ url_for('procesar') }}" method="POST" enctype="multipart/form-data">
+        <div style="margin-bottom:10px;">
+          <label for="archivo">Archivo Excel (.xlsx)</label><br>
+          <input type="file" id="archivo" name="archivo" accept=".xlsx" required>
+        </div>
+
+        <div style="margin-bottom:10px;">
+          <label for="materia">Materia (opcional)</label><br>
+          <input type="text" id="materia" name="materia" placeholder="Nombre de la materia">
+        </div>
+
+        <button type="submit" class="btn">Procesar archivo</button>
+      </form>
+
+      <!-- Mostrar enlace de descarga si el backend envía excel_path -->
+      {% if excel_path %}
+        <div style="margin-top:12px;">
+          <a class="btn btn-success" href="{{ '/' + excel_path }}" download>Descargar resultados (Excel)</a>
+        </div>
+      {% endif %}
+    </div>
+
+    <p style="margin-top:10px; font-size:0.95rem; color:#555;">Nota: Si un estudiante acumula 13 o más fallas se marcará automáticamente como "En riesgo" (Deserta).</p>
+  </section>
+  {% endif %}
+
+  <!-- Modal para mis guardados (index) -->
+  <div class="modal fade" id="misGuardadosModalIndex" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Estudiantes guardados</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="mis-guardados-contenido-index">
+          <div id="mis-guardados-list-index">Cargando...</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Ventajas -->
+  <section id="ventajas" class="section bg-light" data-aos="fade-up">
+    <h2>Ventajas de trabajar con Eduquantum</h2>
+    <div class="cards">
+      <div class="card" data-aos="zoom-in" data-aos-delay="100">
+        <h3>Aprendizaje Personalizado</h3>
+        <p>Rutas de aprendizaje adaptadas a cada estudiante en tiempo real.</p>
+      </div>
+      <div class="card" data-aos="zoom-in" data-aos-delay="200">
+        <h3>Analítica con IA</h3>
+        <p>Dashboards inteligentes que anticipan riesgos de bajo rendimiento.</p>
+      </div>
+      <div class="card" data-aos="zoom-in" data-aos-delay="300">
+        <h3>Credenciales Blockchain</h3>
+        <p>Certificaciones seguras, verificables y reconocidas internacionalmente.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Conceptos -->
+  <section id="conceptos" class="section" data-aos="fade-right">
+    <h2>Conceptos Clave</h2>
+    <ul class="concept-list">
+      <li data-aos="flip-left" data-aos-delay="100">Ecosistema de Aprendizaje Inteligente</li>
+      <li data-aos="flip-left" data-aos-delay="200">Intervención Temprana</li>
+      <li data-aos="flip-left" data-aos-delay="300">Integración de aprendizajes</li>
+      <li data-aos="flip-left" data-aos-delay="400">Monitoreo de bienestar</li>
+    </ul>
+  </section>
+
+  <!-- Galería -->
+  <section id="fotos" class="section bg-light" data-aos="fade-up">
+    <h2>Nuestra Empresa</h2>
+    <div class="gallery">
+      <img src="{{ url_for('static', filename='img/foto1.jpg') }}" alt="Equipo de Eduquantum" data-aos="zoom-in" data-aos-delay="100">
+      <img src="{{ url_for('static', filename='img/foto2.jpg') }}" alt="Innovación educativa" data-aos="zoom-in" data-aos-delay="200">
+      <img src="{{ url_for('static', filename='img/foto3.jpg') }}" alt="Tecnología y aprendizaje" data-aos="zoom-in" data-aos-delay="300">
+    </div>
+  </section>
+
+  <!-- Contacto -->
+  <section id="contacto" class="section" data-aos="fade-left">
+    <h2>Contáctanos</h2>
+    <form method="post" action="#">
+      <input type="text" name="nombre" placeholder="Nombre" required data-aos="fade-up" data-aos-delay="100">
+      <input type="email" name="email" placeholder="Correo electrónico" required data-aos="fade-up" data-aos-delay="200">
+      <textarea name="mensaje" placeholder="Tu mensaje" data-aos="fade-up" data-aos-delay="300"></textarea>
+      <button type="submit" class="btn" data-aos="zoom-in" data-aos-delay="400">Enviar</button>
+    </form>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer" data-aos="fade-up">
+    <p>© 2025 Eduquantum | Todos los derechos reservados</p>
+  </footer>
+
+  <!-- JS -->
+  <script>
+    // Dropdown toggle
+    document.querySelectorAll('.dropbtn').forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        button.nextElementSibling.classList.toggle('show');
+      });
+    });
+
+    // Menú hamburguesa
+    const menuToggle = document.getElementById('menuToggle');
+    const navMenu = document.getElementById('navMenu');
+
+    menuToggle.addEventListener('click', () => {
+      navMenu.classList.toggle('active');
+    });
+  </script>
+
+  <!-- AOS Script -->
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+  <script>
+    AOS.init({
+      duration: 1200,
+      once: true
+    });
+  </script>
+    <!-- Bootstrap JS (bundle includes Popper) - required for bootstrap.Modal used below -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // Mis guardados desde la página principal
+    document.getElementById('btn-mis-guardados-index').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-mis-guardados-index')
+      btn.disabled = true
+      const originalText = btn.innerHTML
+      btn.innerHTML = 'Cargando...'
+      try {
+        const res = await fetch('{{ url_for('mis_guardados') }}')
+        if (res.status === 401) {
+          // sesión expirada
+          const cont = document.getElementById('mis-guardados-list-index')
+          cont.innerHTML = '<p class="text-danger">Sesión expirada. Por favor inicie sesión de nuevo.</p>'
+          const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalIndex'))
+          modal.show()
+          return
+        }
+        if (!res.ok) {
+          const cont = document.getElementById('mis-guardados-list-index')
+          cont.innerHTML = '<p class="text-danger">Error cargando guardados (servidor).</p>'
+          const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalIndex'))
+          modal.show()
+          return
+        }
+
+        let data
+        try {
+          data = await res.json()
+        } catch (parseErr) {
+          const cont = document.getElementById('mis-guardados-list-index')
+          cont.innerHTML = '<p class="text-danger">Respuesta inválida del servidor.</p>'
+          const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalIndex'))
+          modal.show()
+          return
+        }
+
+        const cont = document.getElementById('mis-guardados-list-index')
+        if (!data || data.length === 0) {
+          cont.innerHTML = '<p>No hay estudiantes guardados.</p>'
+        } else {
+          let html = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Nombre</th><th>Materia</th><th>Programa</th><th>Nota1</th><th>Nota2</th><th>Fallas</th><th>Fecha</th></tr></thead><tbody>'
+          data.forEach(r => {
+            const fallas = (r.fallas1 || 0) + (r.fallas2 || 0)
+            const fecha = r.fecha_guardado && r.fecha_guardado._seconds ? new Date(r.fecha_guardado._seconds * 1000).toLocaleString() : (r.fecha_guardado && r.fecha_guardado.iso ? r.fecha_guardado.iso : '')
+            html += `<tr><td>${r.nombre || ''}</td><td>${r.materia || ''}</td><td>${r.programa || ''}</td><td>${r.nota1 || ''}</td><td>${r.nota2 || ''}</td><td>${fallas}</td><td>${fecha}</td></tr>`
+          })
+          html += '</tbody></table></div>'
+          cont.innerHTML = html
+        }
+        const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalIndex'))
+        modal.show()
+      } catch (err) {
+        console.error(err)
+        // reportar al servidor para ver detalles
+        try { await fetch('{{ url_for('log_client_error') }}', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({message: 'index mis_guardados error', stack: String(err)})}) } catch(e){}
+        const cont = document.getElementById('mis-guardados-list-index')
+        cont.innerHTML = '<p class="text-danger">Error de red al cargar guardados.</p>'
+        const modal = new bootstrap.Modal(document.getElementById('misGuardadosModalIndex'))
+        modal.show()
+      } finally {
+        btn.disabled = false
+        btn.innerHTML = originalText
+      }
+    })
+  </script>
+</body>
+</html>
