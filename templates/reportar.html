@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reportar Sugerencia - Eduquantum</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <style>
+    .report-container { max-width: 820px; margin: 36px auto; padding: 20px; }
+    .small-note { font-size: 0.95rem; color: #555; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">Eduquantum</div>
+    <nav class="nav">
+      <ul>
+        <li><a href="{{ url_for('index') }}" class="link">Volver</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <div class="section report-container bg-light">
+    <h2>Reportar sugerencia / Enviar correo</h2>
+    <p class="small-note">Se abrirá tu cliente de correo (Outlook u otro) con los campos completos. Verifica y envía desde tu cuenta.</p>
+
+    <form id="reportForm">
+      <label for="to">Para</label>
+      <input id="to" name="to" type="email" value="{{ destinatario }}" required>
+
+      <label for="from">Desde (tu correo)</label>
+      <input id="from" name="from" type="email" value="{{ user_email }}" readonly>
+
+      <label for="subject">Asunto</label>
+      <input id="subject" name="subject" type="text" value="Reporte de sugerencia - {{ profesor }}" required>
+
+  <label for="body">Mensaje</label>
+  <!-- Placeholder fijo que guía lo que debe escribirse para el orientador -->
+  <textarea id="body" name="body" rows="8" placeholder="Describa aquí detalladamente la razón del reporte: contexto, fechas y cualquier información relevante que facilite la atención del orientador."></textarea>
+  <p class="small-note">Escribe o pega el mensaje final en este espacio antes de abrir tu cliente de correo.</p>
+
+      <div style="display:flex; gap:12px; margin-top:12px;">
+        <button id="openOutlook" type="button" class="btn">Abrir en Outlook</button>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancelar</a>
+      </div>
+    </form>
+
+    <script>
+      document.getElementById('openOutlook').addEventListener('click', function(){
+        const to = encodeURIComponent(document.getElementById('to').value || '')
+        const subject = encodeURIComponent(document.getElementById('subject').value || '')
+        const body = encodeURIComponent(document.getElementById('body').value || '')
+        // Construir mailto
+        const mailto = `mailto:${to}?subject=${subject}&body=${body}`
+        // Abrir cliente por defecto (Outlook si es cliente predeterminado)
+        window.location.href = mailto
+      })
+    </script>
+  </div>
+
+  <footer class="footer">
+    <small>© 2025 Eduquantum</small>
+  </footer>
+</body>
+</html>

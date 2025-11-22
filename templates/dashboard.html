@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard - Eduquantum</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .container { max-width: 1000px; margin: 20px auto; padding: 20px; }
+    .charts { display:flex; gap:24px; flex-wrap:wrap; }
+    .card { background:#fff; padding:12px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">Eduquantum</div>
+    <nav class="nav">
+      <ul>
+        <li><a href="{{ url_for('index') }}" class="link">Volver</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <div class="container">
+    <h2>Dashboard de riesgo de deserción</h2>
+    <p class="small-note">Sube un archivo Excel con los datos de los estudiantes para generar las gráficas.</p>
+
+    <form id="uploadForm">
+      <input type="file" id="archivo" name="archivo" accept=".xlsx,.xls" required>
+      <button type="submit" class="btn">Procesar y generar gráficas</button>
+    </form>
+
+    <div id="result" style="margin-top:18px; display:none;">
+      <div class="charts">
+        <div class="card" style="flex:1 1 320px;">
+          <h4>Distribución general</h4>
+          <canvas id="pieChart"></canvas>
+        </div>
+        <div class="card" style="flex:1 1 600px;">
+          <h4>Riesgo por programa</h4>
+          <canvas id="barChart"></canvas>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <strong>Total:</strong> <span id="totalCount">0</span>
+        &nbsp;&nbsp; <strong>En riesgo:</strong> <span id="atRiskCount">0</span>
+        &nbsp;&nbsp; <strong>No en riesgo:</strong> <span id="safeCount">0</span>
+      </div>
+    </div>
+
+    <div id="error" style="margin-top:12px; color:#b00;"></div>
+  </div>
+
+  <script>
+    const uploadForm = document.getElementById('uploadForm')
+    const resultDiv = document.getElementById('result')
+    const errorDiv = document.getElementById('error')
+    let pieChart = null
+    let barChart = null
+    // initial file (if provided via query param)
+    const initialFile = "{{ initial_file|default('') }}"
+
+    async function loadFileByName(filename) {
+      try {
+        const res = await fetch('/dashboard/load?file=' + encodeURIComponent(filename))
+        const data = await res.json()
+        if (!data.ok) {
+          errorDiv.textContent = data.message || 'Error procesando archivo'
+          return
+        }
+        renderCharts(data)
+      } catch (err) {
+        console.error(err)
+        errorDiv.textContent = 'Error al comunicarse con el servidor.'
+      }
+    }
+
+    function renderCharts(data) {
+      resultDiv.style.display = 'block'
+      document.getElementById('totalCount').textContent = data.total
+      document.getElementById('atRiskCount').textContent = data.at_risk
+      document.getElementById('safeCount').textContent = data.safe
+
+      // Pie chart
+      const pieCtx = document.getElementById('pieChart').getContext('2d')
+      const pieData = {
+        labels: ['En riesgo', 'No en riesgo'],
+        datasets: [{ data: [data.at_risk, data.safe], backgroundColor: ['#e74c3c', '#2ecc71'] }]
+      }
+      if (pieChart) pieChart.destroy()
+      pieChart = new Chart(pieCtx, { type: 'pie', data: pieData })
+
+      // Bar chart per program
+      const labels = Object.keys(data.by_program)
+      const atRiskVals = labels.map(l => data.by_program[l].at_risk)
+      const safeVals = labels.map(l => data.by_program[l].safe)
+      const barCtx = document.getElementById('barChart').getContext('2d')
+      const barData = {
+        labels: labels,
+        datasets: [
+          { label: 'En riesgo', data: atRiskVals, backgroundColor: '#e74c3c' },
+          { label: 'No en riesgo', data: safeVals, backgroundColor: '#2ecc71' }
+        ]
+      }
+      if (barChart) barChart.destroy()
+      barChart = new Chart(barCtx, { type: 'bar', data: barData, options: { responsive: true, scales: { x: { stacked: true }, y: { beginAtZero: true } } } })
+    }
+
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      errorDiv.textContent = ''
+      const input = document.getElementById('archivo')
+      if (!input.files.length) return
+      const fd = new FormData()
+      fd.append('archivo', input.files[0])
+      try {
+        const res = await fetch('/dashboard/process', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (!data.ok) {
+          errorDiv.textContent = data.message || 'Error procesando archivo'
+          return
+        }
+        renderCharts(data)
+
+      } catch (err) {
+        console.error(err)
+        errorDiv.textContent = 'Error al comunicarse con el servidor.'
+      }
+    })
+
+    // Si se pasó un archivo inicial desde resultados (query param), cargarlo automáticamente
+    if (initialFile && initialFile.trim().length > 0) {
+      loadFileByName(initialFile)
+    }
+  </script>
+
+  <footer class="footer">
+    <small>© 2025 Eduquantum</small>
+  </footer>
+</body>
+</html>

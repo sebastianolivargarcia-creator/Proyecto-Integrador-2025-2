@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_from_directory
 import datetime
 from flask_login import (
     LoginManager,
@@ -17,7 +17,7 @@ from firebase_admin import credentials, auth, firestore
 
 # ---------------- CONFIGURACIÓN INICIAL ----------------
 app = Flask(__name__)
-app.secret_key = "CLAVE_SUPER_SECRETA_CAMBIALA"
+app.secret_key = "SILENE_TE_AMO_CON_TODO_MI_CORAZON"
 
 # ---------------- INICIALIZAR FIREBASE ----------------
 cred_path = os.path.join(os.path.dirname(__file__), "eduquantum-16b89-firebase-adminsdk-fbsvc-7775b942f7.json")
@@ -139,10 +139,73 @@ def procesar():
 
     df = pd.read_excel(ruta)
 
+    # Normalizar nombres de columnas: quitar espacios extremos y pasar a mayúsculas
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Mapeo de columnas esperadas a posibles variantes en los archivos subidos
+    candidatos = {
+        'FALLAS1': ['FALLAS1', 'FALLAS 1', 'FALLAS_1', 'FALLAS-1', 'FALLA1', 'FALLA_1', 'FALLAS1.0'],
+        'FALLAS2': ['FALLAS2', 'FALLAS 2', 'FALLAS_2', 'FALLAS-2', 'FALLA2', 'FALLA_2', 'FALLAS2.0'],
+        'NOTA1': ['NOTA1', 'NOTA 1', 'NOTA_1', 'NOTAS1', 'NOTA1.0'],
+        'NOTA2': ['NOTA2', 'NOTA 2', 'NOTA_2', 'NOTAS2', 'NOTA2.0'],
+        'VEZVISTA': ['VEZVISTA', 'VEZ VISTA', 'VEZ_VISTA', 'VEZ-VISTA', 'VEZVISTAS'],
+    }
+
+    # Crear un diccionario inverso para buscar columnas existentes (case-insensitive)
+    cols_lower = {c.lower(): c for c in df.columns}
+
+    mapping = {}
+    for esperado, variantes in candidatos.items():
+        encontrado = None
+        for v in variantes:
+            if v.lower() in cols_lower:
+                encontrado = cols_lower[v.lower()]
+                break
+        # Si no se encontró por variante, intentar por sufijo parcial (ej. columna que contiene 'FALLAS' y '1')
+        if not encontrado:
+            for col in df.columns:
+                col_l = col.lower()
+                if esperado.lower()[:5] in col_l and any(ch in col_l for ch in ['1', '2']):
+                    # heurística: asignar si contiene el número
+                    if esperado.endswith('1') and '1' in col_l:
+                        encontrado = col
+                        break
+                    if esperado.endswith('2') and '2' in col_l:
+                        encontrado = col
+                        break
+        if encontrado:
+            mapping[esperado] = encontrado
+
+    # Verificar que tenemos las columnas esenciales
+    esenciales = ['FALLAS1', 'FALLAS2', 'NOTA1', 'NOTA2', 'VEZVISTA', 'PROGRAMA_ACADEMICO', 'APELLIDOS_Y_NOMBRES', 'NOM_MATERIA']
+    faltantes = [e for e in esenciales if e not in mapping and e not in df.columns]
+    # permitir que si la columna existe exactamente en df.columns, la usemos
+    for e in esenciales:
+        if e in df.columns and e not in mapping:
+            mapping[e] = e
+
+    if faltantes:
+        flash(f"El archivo subido no contiene las columnas requeridas: {', '.join(faltantes)}. Revisa el formato del Excel.", 'danger')
+        return redirect(url_for('index'))
+
+    # Renombrar columnas según el mapping para el resto del flujo
+    rename_map = {v: k for k, v in mapping.items()}
+    df = df.rename(columns=rename_map)
+
     # Reglas de negocio
-    df['FALLAS_TOTALES'] = df['FALLAS1'] + df['FALLAS2']
+    # Asegurarse de que las columnas numéricas sean numéricas
+    for col in ['FALLAS1', 'FALLAS2', 'NOTA1', 'NOTA2']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    df['FALLAS_TOTALES'] = df['FALLAS1'].fillna(0) + df['FALLAS2'].fillna(0)
     df['Deserta'] = 0
-    df.loc[df['FALLAS_TOTALES'] >= 13, 'Deserta'] = 1
+    # Regla: marcar como deserta si suma de faltas cercana o superior a 13 (ajustada a 10)
+    # o si el promedio de notas es menor a 3.2 (nuevo umbral)
+    df.loc[(df['FALLAS_TOTALES'] >= 10) | ((df[['NOTA1','NOTA2']].mean(axis=1) < 3.2)), 'Deserta'] = 1
+
+    # Inicializar Prediccion_Modelo con la regla simple (Deserta) para asegurar que
+    # los casos ya marcados por la regla se conserven y no queden como NaN.
+    df['Prediccion_Modelo'] = df['Deserta'].fillna(0).astype(int)
 
     df_sin_perder = df[df['Deserta'] == 0]
     if not df_sin_perder.empty:
@@ -173,12 +236,33 @@ def procesar():
                 mensajes.append(f"{c}: {ejemplos_txt}")
             flash("Se encontraron valores no numéricos en las columnas: " + "; ".join(mensajes), "warning")
 
-        preds = modelo.predict(X_numeric)
-        df.loc[df['Deserta'] == 0, 'Prediccion_Modelo'] = preds
+        try:
+            preds = modelo.predict(X_numeric)
+            # Asegurar longitud consistente
+            if len(preds) == len(X_numeric):
+                df.loc[df['Deserta'] == 0, 'Prediccion_Modelo'] = preds.astype(int)
+            else:
+                print('[procesar] Warning: longitud de preds != filas a predecir', len(preds), len(X_numeric))
+        except Exception as ex:
+            print('[procesar] modelo.predict error:', ex)
+            # En caso de fallo del modelo, mantenemos la predicción basada en la regla
+            # y no sobrescribimos Prediccion_Modelo
+            pass
     else:
         df['Prediccion_Modelo'] = df['Deserta']
 
-    df['En_Riesgo'] = df['Prediccion_Modelo'].apply(lambda x: "Sí" if x == 1 else "No")
+    # Normalizar Prediccion_Modelo y crear etiqueta legible
+    df['Prediccion_Modelo'] = pd.to_numeric(df['Prediccion_Modelo'], errors='coerce').fillna(0).astype(int)
+    df['En_Riesgo'] = df['Prediccion_Modelo'].apply(lambda x: "Sí" if int(x) == 1 else "No")
+
+    # Debug / diagnóstico: imprimir conteos sencillos para verificar comportamiento
+    try:
+        total = len(df)
+        by_rule = int((df['Deserta'] == 1).sum())
+        by_model = int((df['Prediccion_Modelo'] == 1).sum())
+        print(f"[procesar] total={total} marcados_por_regla={by_rule} marcados_por_modelo={by_model}")
+    except Exception:
+        pass
 
     columnas = [
         'PROGRAMA_ACADEMICO', 'APELLIDOS_Y_NOMBRES', 'NOM_MATERIA',
@@ -239,20 +323,20 @@ def generar_sugerencia_por_fila(fila):
     import random
     random.seed()  # usa semilla variable
 
-    # Si está cerca por faltas (p. ej. 8+ faltas) o ya por la regla 13
-    if fallas_tot >= 8 and (prom is None or prom >= 3.0):
+    # Si está cerca por faltas (p. ej. 8+ faltas) o ya por la regla (>=10)
+    if fallas_tot >= 8 and (prom is None or prom >= 3.2):
         base = random.choice(consejos_faltas)
         detalle = f" (Registro actual de faltas: {int(fallas_tot)})"
         return base + detalle
 
     # Si nota baja
-    if prom is not None and prom < 3.0:
+    if prom is not None and prom < 3.2:
         base = random.choice(consejos_notas)
         detalle = f" (Promedio: {prom:.2f})"
         return base + detalle
 
     # Si ambas cosas
-    if fallas_tot >= 8 and prom is not None and prom < 3.0:
+    if fallas_tot >= 8 and prom is not None and prom < 3.2:
         base = random.choice(consejos_faltas + consejos_notas)
         detalle = f" (Promedio: {prom:.2f}, Faltas: {int(fallas_tot)})"
         return base + detalle
@@ -341,6 +425,15 @@ def test_json():
     return jsonify({"ok": True, "server_time": datetime.datetime.utcnow().isoformat()})
 
 
+@app.route('/img/<path:filename>')
+def img_file(filename):
+    """Serve files from the project's img/ folder (used by templates).
+    This avoids having to copy images into the static/ folder during development.
+    """
+    img_dir = os.path.join(os.path.dirname(__file__), 'img')
+    return send_from_directory(img_dir, filename)
+
+
 @app.route('/log_client_error', methods=['POST'])
 def log_client_error():
     payload = request.get_json() or {}
@@ -349,6 +442,24 @@ def log_client_error():
     if payload.get('stack'):
         print(payload.get('stack'))
     return jsonify({"ok": True})
+
+
+@app.route('/reportar', methods=['GET'])
+@login_required
+def reportar():
+    """Renderiza un formulario para reportar una sugerencia por correo.
+    El formulario se abre como mailto: en el cliente (Outlook u otro cliente por defecto).
+    """
+    texto = request.args.get('texto', '')
+    # correo del usuario autenticado (se guarda en current_user.id)
+    user_email = getattr(current_user, 'id', '')
+    profesor = getattr(current_user, 'nombre', '')
+    # destinatario por defecto (puede ajustarse)
+    destinatario_default = 'Asesor-Psicologo@ustabuca.edu.co'
+    return render_template('reportar.html', texto=texto, user_email=user_email, profesor=profesor, destinatario=destinatario_default)
+
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
